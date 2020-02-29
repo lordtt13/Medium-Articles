@@ -17,3 +17,11 @@ fashion_mnist = tf.keras.datasets.fashion_mnist
 x_train, x_test = x_train / 255.0, x_test / 255.0
 print("x_train.shape:", x_train.shape)
 print("x_test.shape:", x_test.shape)
+
+x_train = np.expand_dims(x_train, -1)
+x_test = np.expand_dims(x_test, -1)
+print(x_train.shape)
+
+# number of classes
+K = len(set(y_train))
+print("number of classes:", K)
