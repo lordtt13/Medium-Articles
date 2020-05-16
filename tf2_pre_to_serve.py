@@ -9,6 +9,17 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Conv2D, Dense, Flatten, Dropout, MaxPooling2D, BatchNormalization
+
+
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+config = ConfigProto()
+config.gpu_options.allow_growth = True
+session = InteractiveSession(config = config)
+
 
 # Load in the data
 fashion_mnist = tf.keras.datasets.fashion_mnist
@@ -26,43 +37,44 @@ print(x_train.shape)
 K = len(set(y_train))
 print("number of classes:", K)
 
-"""
-# Model Definition using Sequential Class
-model = tf.keras.models.Sequential()
-model.add(tf.keras.layers.Conv2D(32, (3, 3), strides=2, activation='relu', input_shape = (x_train.shape)))
-model.add(tf.keras.layers.BatchNormalization())
-model.add(tf.keras.layers.MaxPooling2D((2, 2)))
-model.add(tf.keras.layers.Conv2D(64, (3, 3), strides=2, activation='relu'))
-model.add(tf.keras.layers.BatchNormalization())
-model.add(tf.keras.layers.MaxPooling2D((2, 2)))
-model.add(tf.keras.layers.Conv2D(128, (3, 3), strides=2, activation='relu'))
-model.add(tf.keras.layers.BatchNormalization())
-model.add(tf.keras.layers.MaxPooling2D((2, 2)))
-model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Dense(1024, activation = 'relu'))
-model.add(tf.keras.layers.Dropout(0.2))
-model.add(tf.keras.layers.Dense(K, activation = 'softmax'))
-"""
+def create_model():
+  i = Input(shape = x_train[0].shape)
 
-# Build the model using the functional API
-i = tf.keras.layers.Input(shape=x_train[0].shape)
-x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')(i)
-x = tf.keras.layers.BatchNormalization()(x)
-x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
-x = tf.keras.layers.BatchNormalization()(x)
-x = tf.keras.layers.MaxPooling2D((2, 2))(x)
-x = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same')(x)
-x = tf.keras.layers.BatchNormalization()(x)
-x = tf.keras.layers.MaxPooling2D((2, 2))(x)
-x = tf.keras.layers.GlobalMaxPooling2D()(x)
-x = tf.keras.layers.Dense(1024, activation='relu')(x)
-x = tf.keras.layers.Dropout(0.2)(x)
-x = tf.keras.layers.Dense(K, activation='softmax')(x)
+  x = Conv2D(32, (3, 3), activation = 'relu', padding = 'same')(i)
+  x = BatchNormalization()(x)
+  x = Conv2D(32, (3, 3), activation = 'relu', padding = 'same')(x)
+  x = BatchNormalization()(x)
+  x = MaxPooling2D((2, 2))(x)
+  x = Conv2D(64, (3, 3), activation = 'relu', padding = 'same')(x)
+  x = BatchNormalization()(x)
+  x = Conv2D(64, (3, 3), activation = 'relu', padding = 'same')(x)
+  x = BatchNormalization()(x)
+  x = MaxPooling2D((2, 2))(x)
+  x = Conv2D(128, (3, 3), activation = 'relu', padding = 'same')(x)
+  x = BatchNormalization()(x)
+  x = Conv2D(128, (3, 3), activation = 'relu', padding = 'same')(x)
+  x = BatchNormalization()(x)
+  x = MaxPooling2D((2, 2))(x)
 
-model = tf.keras.models.Model(i, x)
+  x = Flatten()(x)
+  x = Dropout(0.2)(x)
+  x = Dense(1024, activation = 'relu')(x)
+  x = Dropout(0.2)(x)
+  x = Dense(K, activation = 'softmax')(x)
 
-model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
+  model = Model(i, x)
+  return model
 
-model.fit(x_train, y_train, validation_data = (x_test, y_test), epochs = 10)
+strategy = tf.distribute.MirroredStrategy()
+# strategy = tf.distribute.experimental.CentralStorageStrategy()
+
+print(f'Number of devices: {strategy.num_replicas_in_sync}')
+
+with strategy.scope():
+  model = create_model()
+
+  model.compile(loss = 'sparse_categorical_crossentropy',
+                optimizer = 'adam',
+                metrics = ['accuracy'])
+  
+r = model.fit(x_train, y_train, validation_data = (x_test, y_test), epochs = 5)
